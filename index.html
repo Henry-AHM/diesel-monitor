@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en-NZ" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diesel Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23c2410c'/%3E%3Cpath d='M16 7c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z' fill='%23fff'/%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f5f3ef; --surface:#fffdfa; --surface-2:#f0ede7; --border:#e2ddd4; --text:#1f1d1a; --muted:#6b665d; --faint:#9a948a;
+  --diesel:#c2410c; --brent:#1d4ed8; --fx:#0f766e; --corr:#7c3aed; --pos:#15803d; --neg:#b91c1c; --band:rgba(194,65,12,.07);
+  --radius:10px; --shadow:0 1px 2px rgba(30,25,15,.05),0 2px 8px rgba(30,25,15,.04);
+  --font:'General Sans',Inter,system-ui,sans-serif;
+}
+[data-theme=dark]{
+  --bg:#12110f; --surface:#1b1a17; --surface-2:#24221e; --border:#33302a; --text:#ece8e1; --muted:#a39d92; --faint:#6f6a61;
+  --diesel:#fb923c; --brent:#60a5fa; --fx:#2dd4bf; --corr:#a78bfa; --pos:#4ade80; --neg:#f87171; --band:rgba(251,146,60,.08);
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden}
+.app{display:grid;grid-template-rows:auto 1fr;height:100dvh}
+header{display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;letter-spacing:-.01em}
+.brand svg{color:var(--diesel)}
+.brand small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px}
+.icon-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;width:32px;height:32px;display:grid;place-items:center;cursor:pointer}
+main{min-width:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 24px 40px}
+.wrap{min-width:0;max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;box-shadow:var(--shadow)}
+.ctl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:8px;padding:2px}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 12px var(--font);padding:5px 10px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.seg button:focus-visible,.icon-btn:focus-visible{outline:2px solid var(--brent);outline-offset:1px}
+label.chk{display:flex;gap:6px;align-items:center;cursor:pointer;color:var(--text);font-size:12px}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.kpi{padding:14px 16px}
+.kpi .lbl{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.kpi .val{font-size:26px;font-weight:600;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums lining-nums}
+.kpi .sub{font-size:12px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+.panel{padding:16px 18px}
+.panel h2{font-size:14px;font-weight:600;margin:0}
+.panel .desc{font-size:12px;color:var(--muted);margin:2px 0 12px}
+.ph{display:flex;align-items:flex-start;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.chart-box{position:relative;height:380px}
+.chart-box.sm{height:230px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.lagcards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.lagcard{background:var(--surface-2);border-radius:8px;padding:10px;text-align:center}
+.lagcard .l{font-size:11px;color:var(--muted)}
+.lagcard .v{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.lagcard .s{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.lagcard.best{outline:1.5px solid var(--corr)}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums lining-nums}
+th,td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+th{font-weight:500;color:var(--muted);font-size:11.5px;background:var(--surface);position:sticky;top:0}
+th.grp{text-align:center;border-bottom:1px solid var(--border);color:var(--text);font-weight:600}
+td:first-child,th:first-child{text-align:left}
+tbody tr:hover{background:var(--surface-2)}
+tfoot td{font-weight:600;border-top:2px solid var(--border);border-bottom:0}
+.up{color:var(--neg)} .down{color:var(--pos)} .na{color:var(--faint)}
+.flag{font-size:10px;color:var(--muted);margin-left:3px}
+.ratio{display:inline-block;min-width:52px;padding:1px 6px;border-radius:4px;background:var(--surface-2)}
+.notes{font-size:12px;color:var(--muted);line-height:1.6}
+.notes a{color:var(--brent)}
+.notes p{margin:0 0 6px}
+.shock{display:inline-block;width:12px;height:10px;background:var(--band);border:1px dashed var(--diesel);vertical-align:middle;margin-right:4px}
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}.grid2{grid-template-columns:1fr}}
+@media (max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}header{padding:10px 14px}main{padding:14px}.hdr-right .asof{display:none}.chart-box{height:300px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-label="Crude-to-Pump logo">
+      <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2.4"/>
+      <path d="M16 7.5c3.6 4.6 5.6 7.6 5.6 10.4a5.6 5.6 0 0 1-11.2 0c0-2.8 2-5.8 5.6-10.4z" fill="currentColor"/>
+      <path d="M4 21h24" stroke="currentColor" stroke-width="2.4"/>
+    </svg>
+    <div>Crude-to-Pump Monitor<small>NZ retail diesel vs Brent crude · <span id="rng"></span></small></div>
+  </div>
+  <div class="hdr-right"><span class="asof" id="asof"></span>
+    <button class="icon-btn" id="theme" aria-label="Toggle dark mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+  </div>
+</header>
+<main><div class="wrap">
+
+  <div class="controls" role="group" aria-label="Dashboard controls">
+    <div class="ctl">Diesel series <div class="seg" data-k="dser"><button data-v="board" aria-pressed="true">Board price</button><button data-v="adj">Discount-adjusted</button></div></div>
+    <div class="ctl">Brent unit <div class="seg" data-k="bunit"><button data-v="usd" aria-pressed="true">USD/bbl</button><button data-v="cpl">NZ c/L equiv.</button></div></div>
+    <label class="chk"><input type="checkbox" id="fxOn" checked> USD/NZD overlay</label>
+    <div class="ctl">Corr. window <div class="seg" data-k="win"><button data-v="3">3m</button><button data-v="6" aria-pressed="true">6m</button><button data-v="9">9m</button></div></div>
+    <div class="ctl">Corr. basis <div class="seg" data-k="basis"><button data-v="lvl" aria-pressed="true">Levels</button><button data-v="chg">MoM % change</button></div></div>
+    <div class="ctl">Diesel lag <div class="seg" data-k="lag"><button data-v="0">0d</button><button data-v="30" aria-pressed="true">30d</button><button data-v="60">60d</button></div></div>
+  </div>
+
+  <section class="kpis" id="kpis" aria-label="Key metrics"></section>
+
+  <section class="card panel">
+    <div class="ph"><div><h2>Diesel pump price vs Brent crude</h2><p class="desc">Monthly averages; <span id="mtdnote"></span> Left axis: diesel c/L. Right axis: Brent. Dashed: USD/NZD.</p></div>
+      <div class="legend" id="legendMain"></div></div>
+    <div class="chart-box"><canvas id="cMain" aria-label="Dual-axis chart of diesel and Brent prices"></canvas></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card panel">
+      <div class="ph"><div><h2>Rolling correlation</h2><p class="desc" id="corrDesc"></p></div></div>
+      <div class="chart-box sm"><canvas id="cCorr" aria-label="Rolling correlation chart"></canvas></div>
+    </section>
+    <section class="card panel">
+      <h2>Lag response, full period</h2>
+      <p class="desc">Brent MoM % change vs diesel % change at each lag.</p>
+      <div class="lagcards" id="lagcards"></div>
+      <div class="chart-box sm" style="height:150px;margin-top:10px"><canvas id="cLag" aria-label="Pass-through by lag"></canvas></div>
+    </section>
+  </div>
+
+  <section class="card panel">
+    <div class="ph"><div><h2>Transmission table</h2><p class="desc">Monthly change in Brent vs diesel, same month and shifted 30 / 60 days.</p></div>
+      <div class="ctl">View <div class="seg" data-k="tview"><button data-v="pct" aria-pressed="true">% change</button><button data-v="cpl">c/L change</button></div></div></div>
+    <div class="tbl-wrap"><table id="tbl"></table></div>
+  </section>
+
+  <section class="card panel notes">
+    <h2 style="color:var(--text);margin-bottom:8px">Method and sources</h2>
+    <p><b>Diesel:</b> MBIE weekly main-port board price (c/L, incl. GST), or the discount-adjusted retail price, from <a href="https://www.mbie.govt.nz/building-and-energy/energy-and-natural-resources/energy-statistics-and-modelling/energy-statistics/weekly-fuel-price-monitoring" target="_blank" rel="noopener">MBIE weekly fuel price monitoring</a>. Monthly bucket = mean of weekly (Friday) observations. Weeks from Jul 2026 are marked provisional by MBIE.</p>
+    <p><b>Brent:</b> daily Europe Brent spot, <a href="https://fred.stlouisfed.org/series/DCOILBRENTEU" target="_blank" rel="noopener">FRED DCOILBRENTEU</a>. <b>FX:</b> daily US$ per NZ$, <a href="https://fred.stlouisfed.org/series/DEXUSNZ" target="_blank" rel="noopener">FRED DEXUSNZ</a>. NZ c/L equivalent = Brent ÷ USD/NZD ÷ 158.987 L × 100.</p>
+    <p><b>Lags:</b> weekly diesel is interpolated to daily, then averaged over the calendar month shifted forward 30 or 60 days. Percentage changes are month-on-month. Transmission ratio = diesel % change ÷ Brent % change (in NZD). A ratio below 1 is expected, because GST, margins and freight dilute the crude share of the pump price. Ratios are hidden where Brent moved less than 2%. Lagged values use MBIE data to <span id="mlast"></span>; a lag that runs past the latest week is left blank.</p>
+    <p><b><span id="mtdname"></span>:</b> averages use the latest published observations only: MBIE diesel to <span id="m2"></span>, Brent spot to <span id="b2"></span>, USD/NZD to <span id="f2"></span>. Figures will change as later weeks are released. Brent futures were not spliced in, because front-month futures trade well below dated spot in the current market.</p>
+    <p><span class="shock"></span><b>Shaded band, Mar-Apr 2026:</b> Brent rose 63% in March, its largest monthly gain since 1988, as the Iran war disrupted Gulf supply (<a href="https://www.cnbc.com/2026/03/31/oil-price-today-wti-brent-trump-energy-sites-water-war-escalation-deal.html" target="_blank" rel="noopener">CNBC</a>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=67424" target="_blank" rel="noopener">EIA</a>). Stats NZ reported diesel prices up 36.6% from March to April 2026 (<a href="https://www.stats.govt.nz/news/petrol-and-diesel-prices-continue-to-rise-in-april-2026/" target="_blank" rel="noopener">Stats NZ</a>).</p>
+  </section>
+</div></main>
+</div>
+
+<script>
+const S={dser:'board',bunit:'usd',win:6,basis:'lvl',lag:30,tview:'pct',fx:true};
+let D,M,charts={};
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt=(v,d=1)=>v==null||isNaN(v)?'-':v.toFixed(d);
+const pct=(a,b)=>(a==null||b==null)?null:(a/b-1)*100;
+const mlabel=m=>{const[y,mo]=m.split('-');return new Date(y,mo-1,1).toLocaleString('en-NZ',{month:'short'})+' '+y.slice(2)};
+function pearson(x,y){const p=x.map((v,i)=>[v,y[i]]).filter(([a,b])=>a!=null&&b!=null);const n=p.length;if(n<3)return null;
+  const mx=p.reduce((s,[a])=>s+a,0)/n,my=p.reduce((s,[,b])=>s+b,0)/n;let sxy=0,sxx=0,syy=0;
+  p.forEach(([a,b])=>{sxy+=(a-mx)*(b-my);sxx+=(a-mx)**2;syy+=(b-my)**2});return sxy/Math.sqrt(sxx*syy)}
+function ols(x,y){const p=x.map((v,i)=>[v,y[i]]).filter(([a,b])=>a!=null&&b!=null);const n=p.length;if(n<3)return null;
+  const mx=p.reduce((s,[a])=>s+a,0)/n,my=p.reduce((s,[,b])=>s+b,0)/n;let sxy=0,sxx=0;p.forEach(([a,b])=>{sxy+=(a-mx)*(b-my);sxx+=(a-mx)**2});return {beta:sxy/sxx,n}}
+const dKey=L=>(S.dser==='board'?'d':'da')+L;
+const dLvl=r=>S.dser==='board'?r.diesel:r.diesel_adj;
+
+// derive per-month change series (index 0 = Feb 2025 base month)
+function derive(){
+  return M.map((r,i)=>{const p=M[i-1];const o={...r};
+    o.brentPct=p?pct(r.brent,p.brent):null; o.brentNzPct=p?pct(r.brent_cpl,p.brent_cpl):null; o.fxPct=p?pct(r.usdnzd,p.usdnzd):null;
+    o.brentCplChg=p?r.brent_cpl-p.brent_cpl:null;
+    [0,30,60].forEach(L=>{const k=dKey(L);o['dp'+L]=p&&r[k]!=null&&p[k]!=null?pct(r[k],p[k]):null;o['dc'+L]=p&&r[k]!=null&&p[k]!=null?r[k]-p[k]:null;});
+    return o;});
+}
+const bandPlugin={id:'band',beforeDatasetsDraw(c){const {ctx,chartArea:a,scales:{x}}=c;const i0=c.data.labels.indexOf('Mar 26'),i1=c.data.labels.indexOf('Apr 26');if(i0<0)return;
+  const w=(x.getPixelForValue(1)-x.getPixelForValue(0))/2;ctx.save();ctx.fillStyle=css('--band');ctx.fillRect(x.getPixelForValue(i0)-w,a.top,x.getPixelForValue(i1)-x.getPixelForValue(i0)+2*w,a.bottom-a.top);
+  ctx.fillStyle=css('--muted');ctx.font='11px General Sans, sans-serif';ctx.fillText('Iran war supply shock',x.getPixelForValue(i0)-w+6,a.bottom-8);ctx.restore();}};
+
+function baseOpts(){Chart.defaults.font.family="'General Sans',Inter,sans-serif";Chart.defaults.color=css('--muted');Chart.defaults.borderColor=css('--border');}
+
+function render(){
+  baseOpts();
+  const R=derive(), V=R.slice(1); // Mar 2025 - Aug 2026
+  const labels=V.map(r=>mlabel(r.month));
+  const brentVals=V.map(r=>S.bunit==='usd'?r.brent:r.brent_cpl);
+  // KPIs
+  const f=V[0],l=V[V.length-1];
+  const ch=R.slice(1);
+  const lagStats=[0,30,60].map(L=>{const x=ch.map(r=>r.brentNzPct),y=ch.map(r=>r['dp'+L]);return {L,r:pearson(x,y),b:ols(x,y)}});
+  const best=lagStats.reduce((a,b)=>(b.r??-9)>(a.r??-9)?b:a);
+  const lvlCorr=pearson(V.map(r=>r.brent_cpl),V.map(r=>r[dKey(S.lag)]));
+  const k=[
+    {c:'--diesel',l:'Diesel, '+mlabel(l.month)+(l.mtd?' MTD':''),v:fmt(dLvl(l))+'<span style="font-size:14px;color:var(--muted)"> c/L</span>',s:`${sign(pct(dLvl(l),dLvl(f)))}% vs Mar 25 (${fmt(dLvl(f))})`},
+    {c:'--brent',l:'Brent, '+mlabel(l.month)+(l.mtd?' MTD':''),v:'$'+fmt(l.brent),s:`${sign(pct(l.brent,f.brent))}% vs Mar 25 ($${fmt(f.brent)})`},
+    {c:'--fx',l:'USD/NZD, '+mlabel(l.month)+(l.mtd?' MTD':''),v:fmt(l.usdnzd,4),s:`${sign(pct(l.usdnzd,f.usdnzd))}% vs Mar 25`},
+    {c:'--corr',l:`Level correlation, ${S.lag}d lag`,v:fmt(lvlCorr,2),s:`Brent (NZD) vs diesel, ${V.length} months`},
+    {c:'--corr',l:'Strongest lag',v:best.L+'d',s:`r = ${fmt(best.r,2)} · β = ${fmt(best.b?.beta,2)}`}
+  ];
+  document.getElementById('kpis').innerHTML=k.map(o=>`<div class="card kpi"><div class="lbl"><span class="dot" style="background:var(${o.c})"></span>${o.l}</div><div class="val">${o.v}</div><div class="sub">${o.s}</div></div>`).join('');
+
+  // main chart
+  const ds=[
+    {label:S.dser==='board'?'Diesel board price (c/L)':'Diesel discount-adjusted (c/L)',data:V.map(dLvl),borderColor:css('--diesel'),backgroundColor:css('--diesel'),yAxisID:'yD',tension:.3,borderWidth:2.5,pointRadius:3},
+    {label:S.bunit==='usd'?'Brent (USD/bbl)':'Brent (NZ c/L equiv.)',data:brentVals,borderColor:css('--brent'),backgroundColor:css('--brent'),yAxisID:'yB',tension:.3,borderWidth:2.5,pointRadius:3},
+    {label:'USD/NZD',data:V.map(r=>r.usdnzd),borderColor:css('--fx'),backgroundColor:css('--fx'),yAxisID:'yF',tension:.3,borderWidth:1.6,borderDash:[5,4],pointRadius:0,hidden:!S.fx}
+  ];
+  document.getElementById('legendMain').innerHTML=ds.filter(d=>!d.hidden).map(d=>`<span><i style="background:${d.borderColor}${d.borderDash?';background:repeating-linear-gradient(90deg,'+d.borderColor+' 0 4px,transparent 4px 7px)':''}"></i>${d.label}</span>`).join('');
+  charts.main?.destroy();
+  charts.main=new Chart(cMain,{type:'line',data:{labels,datasets:ds},plugins:[bandPlugin],options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.dataset.yAxisID==='yF'?c.parsed.y.toFixed(4):c.parsed.y.toFixed(1)}`}}},
+    scales:{x:{grid:{display:false}},
+      yD:{position:'left',title:{display:true,text:'Diesel c/L',color:css('--diesel')},ticks:{color:css('--diesel')},grid:{color:css('--border')}},
+      yB:{position:'right',title:{display:true,text:S.bunit==='usd'?'Brent USD/bbl':'Brent NZ c/L',color:css('--brent')},ticks:{color:css('--brent')},grid:{display:false}},
+      yF:{position:'right',display:S.fx,min:0.54,max:0.63,title:{display:true,text:'USD/NZD',color:css('--fx')},ticks:{color:css('--fx'),callback:v=>v.toFixed(2)},grid:{display:false}}}}});
+
+  // rolling correlation
+  const bx=S.basis==='lvl'?R.map(r=>r.brent_cpl):R.map(r=>r.brentNzPct);
+  const dy=S.basis==='lvl'?R.map(r=>r[dKey(S.lag)]):R.map(r=>r['dp'+S.lag]);
+  const rc=R.map((r,i)=>{if(i<1)return null;const s=i-S.win+1;if(s<(S.basis==='lvl'?0:1))return null;return pearson(bx.slice(s,i+1),dy.slice(s,i+1))}).slice(1);
+  document.getElementById('corrDesc').textContent=`${S.win}-month Pearson r, Brent (NZD) vs diesel ${S.lag}d later, ${S.basis==='lvl'?'price levels':'MoM % changes'}.`;
+  charts.corr?.destroy();
+  charts.corr=new Chart(cCorr,{type:'bar',data:{labels,datasets:[{data:rc,backgroundColor:rc.map(v=>v==null?'transparent':v>=0?css('--corr'):css('--neg')),borderRadius:3,maxBarThickness:22}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' r = '+(c.parsed.y==null?'n/a':c.parsed.y.toFixed(2))}}},
+    scales:{x:{grid:{display:false}},y:{min:-1,max:1,ticks:{stepSize:.5},grid:{color:c=>c.tick.value===0?css('--muted'):css('--border')}}}}});
+
+  // lag cards + chart
+  document.getElementById('lagcards').innerHTML=lagStats.map(s=>`<div class="lagcard ${s===best?'best':''}"><div class="l">${s.L===0?'Same month':'+'+s.L+' days'}</div><div class="v">r ${fmt(s.r,2)}</div><div class="s">β ${fmt(s.b?.beta,2)} · n ${s.b?.n??0}</div></div>`).join('');
+  charts.lag?.destroy();
+  charts.lag=new Chart(cLag,{type:'bar',data:{labels:['0d','30d','60d'],datasets:[{label:'Correlation r',data:lagStats.map(s=>s.r),backgroundColor:css('--corr'),borderRadius:3,maxBarThickness:26},{label:'Pass-through β',data:lagStats.map(s=>s.b?.beta),backgroundColor:css('--diesel'),borderRadius:3,maxBarThickness:26}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},scales:{x:{min:-0.5,max:1.2,grid:{color:css('--border')}},y:{grid:{display:false}}}}});
+
+  renderTable(R,lagStats);
+}
+const sign=(v,d=1)=>{if(v==null)return '-';const t=v.toFixed(d);return /^-0\.0+$/.test(t)?t.slice(1):(v>0?'+':'')+t};
+function cell(v,d=1,unit=''){if(v==null)return '<span class="na">-</span>';const c=v>0.05?'up':v<-0.05?'down':'';const a=v>0.05?'▲':v<-0.05?'▼':'';return `<span class="${c}">${a} ${sign(v,d)}${unit}</span>`}
+function ratio(d,b){if(d==null||b==null||Math.abs(b)<2)return '<span class="na">-</span>';const q=(d/b).toFixed(2);return `<span class="ratio">${/^-0\.00$/.test(q)?'0.00':q}×</span>`}
+function renderTable(R,lagStats){
+  const V=R.slice(1),pctV=S.tview==='pct';
+  const u=pctV?'%':'';
+  let h=`<thead><tr><th rowspan="2">Month</th><th class="grp" colspan="${pctV?4:3}">Crude and FX</th><th class="grp" colspan="4">Diesel (${S.dser==='board'?'board':'adjusted'})</th><th class="grp" colspan="2">${pctV?'Transmission ratio':'c/L pass-through'}</th></tr>
+  <tr><th>Brent $/bbl</th>${pctV?'<th>Brent Δ USD</th><th>Brent Δ NZD</th><th>USD/NZD Δ</th>':'<th>Brent NZ c/L</th><th>Brent Δ c/L</th>'}<th>Avg c/L</th><th>Δ same mo.</th><th>Δ +30d</th><th>Δ +60d</th><th>+30d</th><th>+60d</th></tr></thead><tbody>`;
+  V.forEach(r=>{
+    const pf='<span class="flag" title="Partial window">partial</span>';const part30=r.cov30<1&&r.cov30>0?pf:'';const part0=r.cov0<1&&r.cov0>0?pf:'';
+    h+=`<tr><td>${mlabel(r.month)}${r.mtd?'<span class="flag" title="Month to date">MTD</span>':r.provisional?'<span class="flag" title="MBIE provisional">prov.</span>':''}</td><td>${fmt(r.brent)}</td>`+
+      (pctV?`<td>${cell(r.brentPct,1,u)}</td><td>${cell(r.brentNzPct,1,u)}</td><td>${cell(r.fxPct,2,u)}</td>`:`<td>${fmt(r.brent_cpl)}</td><td>${cell(r.brentCplChg)}</td>`)+
+      `<td>${fmt(dLvl(r))}</td><td>${cell(pctV?r.dp0:r.dc0,1,u)}${part0}</td><td>${cell(pctV?r.dp30:r.dc30,1,u)}${part30}</td><td>${cell(pctV?r.dp60:r.dc60,1,u)}</td>`+
+      (pctV?`<td>${ratio(r.dp30,r.brentNzPct)}</td><td>${ratio(r.dp60,r.brentNzPct)}</td>`:`<td>${ratio(r.dc30,r.brentCplChg)}</td><td>${ratio(r.dc60,r.brentCplChg)}</td>`)+`</tr>`;
+  });
+  // footer: correlation & cumulative
+  const x=V.map(r=>pctV?r.brentNzPct:r.brentCplChg);
+  const st=L=>{const y=V.map(r=>pctV?r['dp'+L]:r['dc'+L]);return {r:pearson(x,y),b:ols(x,y)?.beta}};
+  const s0=st(0),s30=st(30),s60=st(60);
+  const span=pctV?4:3;
+  h+=`</tbody><tfoot><tr><td>Correlation r</td><td colspan="${span}" style="text-align:right;color:var(--muted);font-weight:500">vs Brent Δ (NZD)</td><td></td><td>${fmt(s0.r,2)}</td><td>${fmt(s30.r,2)}</td><td>${fmt(s60.r,2)}</td><td colspan="2"></td></tr>
+  <tr><td>Slope β</td><td colspan="${span}" style="text-align:right;color:var(--muted);font-weight:500">${pctV?'diesel % per 1% Brent':'diesel c/L per 1c Brent'}</td><td></td><td>${fmt(s0.b,2)}</td><td>${fmt(s30.b,2)}</td><td>${fmt(s60.b,2)}</td><td>${fmt(s30.b,2)}×</td><td>${fmt(s60.b,2)}×</td></tr></tfoot>`;
+  tbl.innerHTML=h;
+}
+
+document.querySelectorAll('.seg').forEach(g=>g.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));const k=g.dataset.k;S[k]=isNaN(+b.dataset.v)?b.dataset.v:+b.dataset.v;render();}));
+fxOn.addEventListener('change',e=>{S.fx=e.target.checked;render()});
+theme.addEventListener('click',()=>{const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';render()});
+if(matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.dataset.theme='dark';
+
+(j=>{D=j;M=j.monthly;
+  asof.textContent=`MBIE to ${j.meta.mbie_last} · FRED to ${j.meta.brent_last}`;mlast.textContent=j.meta.mbie_last;m2.textContent=j.meta.mbie_last;b2.textContent=j.meta.brent_last;f2.textContent=j.meta.nzd_last;
+  const ml=j.monthly, f=ml[1], l=ml[ml.length-1];
+  rng.textContent=mlabel(f.month)+' to '+mlabel(l.month)+(l.mtd?' (month to date)':'')+' · refreshed '+j.meta.refreshed;
+  mtdnote.textContent=l.mtd?mlabel(l.month)+' is month to date.':'';
+  mtdname.textContent=mlabel(l.month)+(l.mtd?' (month to date)':' (latest month)');
+  render();})({"monthly":[{"month":"2025-02","brent":75.438,"brent_n":20,"usdnzd":0.568,"brent_nzd":132.7815,"brent_cpl":83.5172,"diesel":201.7204,"diesel_adj":199.1567,"importer":109.1491,"weeks":4,"mtd":false,"provisional":false,"d0":201.9585,"da0":199.3948,"cov0":1.0,"d30":197.6992,"da30":195.1168,"cov30":1.0,"d60":193.4839,"da60":189.5581,"cov60":1.0},{"month":"2025-03","brent":72.7329,"brent_n":21,"usdnzd":0.5727,"brent_nzd":127.0197,"brent_cpl":79.8931,"diesel":197.4767,"diesel_adj":194.913,"importer":102.8516,"weeks":4,"mtd":false,"provisional":false,"d0":197.8396,"da0":195.2421,"cov0":1.0,"d30":193.5318,"da30":189.6525,"cov30":1.0,"d60":186.4061,"da60":182.418,"cov60":1.0},{"month":"2025-04","brent":68.1345,"brent_n":20,"usdnzd":0.5837,"brent_nzd":117.0942,"brent_cpl":73.6502,"diesel":193.7542,"diesel_adj":189.8169,"importer":96.3404,"weeks":4,"mtd":false,"provisional":false,"d0":193.4503,"da0":189.5446,"cov0":1.0,"d30":186.2896,"da30":182.3015,"cov30":1.0,"d60":184.0979,"da60":180.1197,"cov60":1.0},{"month":"2025-05","brent":64.453,"brent_n":20,"usdnzd":0.5936,"brent_nzd":108.63,"brent_cpl":68.3264,"diesel":186.2891,"diesel_adj":182.301,"importer":91.5163,"weeks":5,"mtd":false,"provisional":false,"d0":186.2142,"da0":182.2261,"cov0":1.0,"d30":184.2411,"da30":180.2722,"cov30":1.0,"d60":188.1574,"da60":184.9171,"cov60":1.0},{"month":"2025-06","brent":71.4448,"brent_n":21,"usdnzd":0.6036,"brent_nzd":117.638,"brent_cpl":73.9922,"diesel":184.2314,"diesel_adj":180.2433,"importer":98.2962,"weeks":4,"mtd":false,"provisional":false,"d0":184.2507,"da0":180.2824,"cov0":1.0,"d30":188.1447,"da30":184.9195,"cov30":1.0,"d60":188.1033,"da60":184.9249,"cov60":1.0},{"month":"2025-07","brent":71.0413,"brent_n":23,"usdnzd":0.5992,"brent_nzd":118.5739,"brent_cpl":74.5809,"diesel":188.1303,"diesel_adj":184.9229,"importer":102.652,"weeks":4,"mtd":false,"provisional":false,"d0":188.1557,"da0":184.9319,"cov0":1.0,"d30":188.09,"da30":184.9116,"cov30":1.0,"d60":189.3569,"da60":186.21,"cov60":1.0},{"month":"2025-08","brent":67.87,"brent_n":20,"usdnzd":0.5903,"brent_nzd":114.9433,"brent_cpl":72.2973,"diesel":188.0836,"diesel_adj":184.9051,"importer":101.0718,"weeks":5,"mtd":false,"provisional":false,"d0":188.0687,"da0":184.8902,"cov0":1.0,"d30":189.444,"da30":186.318,"cov30":1.0,"d60":191.0971,"da60":189.3785,"cov60":1.0},{"month":"2025-09","brent":67.9855,"brent_n":22,"usdnzd":0.5884,"brent_nzd":115.639,"brent_cpl":72.7349,"diesel":189.5342,"diesel_adj":186.3557,"importer":103.2894,"weeks":4,"mtd":false,"provisional":false,"d0":189.498,"da0":186.3738,"cov0":1.0,"d30":191.1207,"da30":189.429,"cov30":1.0,"d60":195.1861,"da60":193.6018,"cov60":1.0},{"month":"2025-10","brent":64.5435,"brent_n":23,"usdnzd":0.5765,"brent_nzd":111.9808,"brent_cpl":70.434,"diesel":191.176,"diesel_adj":189.5006,"importer":105.2816,"weeks":5,"mtd":false,"provisional":false,"d0":191.1388,"da0":189.4506,"cov0":1.0,"d30":195.2769,"da30":193.6926,"cov30":1.0,"d60":196.6596,"da60":195.0911,"cov60":1.0},{"month":"2025-11","brent":63.797,"brent_n":20,"usdnzd":0.5652,"brent_nzd":112.8333,"brent_cpl":70.9701,"diesel":195.9,"diesel_adj":194.3157,"importer":112.4112,"weeks":4,"mtd":false,"provisional":false,"d0":195.3967,"da0":193.8124,"cov0":1.0,"d30":196.6149,"da30":195.0469,"cov30":1.0,"d60":191.2575,"da60":190.2152,"cov60":1.0},{"month":"2025-12","brent":62.5443,"brent_n":21,"usdnzd":0.5787,"brent_nzd":108.1204,"brent_cpl":68.0058,"diesel":196.6827,"diesel_adj":195.0984,"importer":100.1959,"weeks":4,"mtd":false,"provisional":false,"d0":196.5303,"da0":194.9697,"cov0":1.0,"d30":191.1841,"da30":190.1436,"cov30":1.0,"d60":188.2001,"da60":187.214,"cov60":1.0},{"month":"2026-01","brent":66.6024,"brent_n":21,"usdnzd":0.5851,"brent_nzd":113.7748,"brent_cpl":71.5623,"diesel":191.0468,"diesel_adj":190.0095,"importer":98.7204,"weeks":5,"mtd":false,"provisional":false,"d0":191.0184,"da0":189.9894,"cov0":1.0,"d30":188.2827,"da30":187.2966,"cov30":1.0,"d60":265.8311,"da60":264.7532,"cov60":1.0},{"month":"2026-02","brent":70.887,"brent_n":20,"usdnzd":0.6009,"brent_nzd":117.9827,"brent_cpl":74.209,"diesel":187.9696,"diesel_adj":186.9835,"importer":103.5104,"weeks":4,"mtd":false,"provisional":false,"d0":188.0689,"da0":187.0829,"cov0":1.0,"d30":262.7573,"da30":261.7305,"cov30":1.0,"d60":366.821,"da60":364.0756,"cov60":1.0},{"month":"2026-03","brent":103.1345,"brent_n":22,"usdnzd":0.5848,"brent_nzd":176.6135,"brent_cpl":111.0867,"diesel":262.2204,"diesel_adj":261.2343,"importer":239.7667,"weeks":4,"mtd":false,"provisional":false,"d0":260.7541,"da0":259.7068,"cov0":1.0,"d30":364.4782,"da30":361.7879,"cov30":1.0,"d60":323.4687,"da60":320.6217,"cov60":1.0},{"month":"2026-04","brent":117.2875,"brent_n":20,"usdnzd":0.5847,"brent_nzd":200.2527,"brent_cpl":125.9554,"diesel":368.6245,"diesel_adj":365.9103,"importer":294.312,"weeks":4,"mtd":false,"provisional":false,"d0":365.154,"da0":362.4323,"cov0":1.0,"d30":323.0572,"da30":320.2101,"cov30":1.0,"d60":292.2173,"da60":289.3702,"cov60":1.0},{"month":"2026-05","brent":107.1395,"brent_n":19,"usdnzd":0.5906,"brent_nzd":181.4139,"brent_cpl":114.1061,"diesel":323.6208,"diesel_adj":320.7737,"importer":183.4058,"weeks":5,"mtd":false,"provisional":false,"d0":322.8349,"da0":319.9878,"cov0":1.0,"d30":291.0705,"da30":288.2234,"cov30":1.0,"d60":249.6487,"da60":246.8016,"cov60":1.0},{"month":"2026-06","brent":85.3991,"brent_n":22,"usdnzd":0.5782,"brent_nzd":147.8812,"brent_cpl":93.0147,"diesel":290.779,"diesel_adj":287.9319,"importer":151.2606,"weeks":4,"mtd":false,"provisional":false,"d0":290.2339,"da0":287.3869,"cov0":1.0,"d30":249.4147,"da30":246.5676,"cov30":1.0,"d60":270.0738,"da60":267.2267,"cov60":1.0},{"month":"2026-07","brent":83.7587,"brent_n":23,"usdnzd":0.5785,"brent_nzd":145.8566,"brent_cpl":91.7412,"diesel":251.1673,"diesel_adj":248.3202,"importer":169.5604,"weeks":5,"mtd":false,"provisional":true,"d0":249.9418,"da0":247.0947,"cov0":1.0,"d30":270.09,"da30":267.2429,"cov30":1.0,"d60":275.6842,"da60":272.8371,"cov60":0.6452},{"month":"2026-08","brent":91.076,"brent_n":20,"usdnzd":0.5909,"brent_nzd":154.1471,"brent_cpl":96.9558,"diesel":270.7569,"diesel_adj":267.9099,"importer":184.1902,"weeks":4,"mtd":false,"provisional":true,"d0":270.2402,"da0":267.3931,"cov0":1.0,"d30":275.953,"da30":273.1059,"cov30":0.6129,"d60":null,"da60":null,"cov60":0.0},{"month":"2026-09","brent":112.955,"brent_n":16,"usdnzd":0.5779,"brent_nzd":195.849,"brent_cpl":123.1855,"diesel":278.1648,"diesel_adj":275.3177,"importer":213.779,"weeks":3,"mtd":true,"provisional":true,"d0":276.2611,"da0":273.414,"cov0":0.6,"d30":null,"da30":null,"cov30":0.0,"d60":null,"da60":null,"cov60":0.0}],"weekly":[{"date":"2025-03-07","diesel":199.54,"adj":196.97},{"date":"2025-03-14","diesel":197.74,"adj":195.17},{"date":"2025-03-21","diesel":196.9,"adj":194.33},{"date":"2025-03-28","diesel":195.73,"adj":193.17},{"date":"2025-04-04","diesel":196.3,"adj":192.52},{"date":"2025-04-11","diesel":195.36,"adj":191.37},{"date":"2025-04-18","diesel":192.53,"adj":188.55},{"date":"2025-04-25","diesel":190.82,"adj":186.83},{"date":"2025-05-02","diesel":189.53,"adj":185.55},{"date":"2025-05-09","diesel":187.28,"adj":183.29},{"date":"2025-05-16","diesel":185.62,"adj":181.64},{"date":"2025-05-23","diesel":184.83,"adj":180.84},{"date":"2025-05-30","diesel":184.18,"adj":180.19},{"date":"2025-06-06","diesel":182.57,"adj":178.58},{"date":"2025-06-13","diesel":182.11,"adj":178.12},{"date":"2025-06-20","diesel":183.93,"adj":179.94},{"date":"2025-06-27","diesel":188.31,"adj":184.33},{"date":"2025-07-04","diesel":188.84,"adj":185.54},{"date":"2025-07-11","diesel":187.9,"adj":184.72},{"date":"2025-07-18","diesel":187.64,"adj":184.47},{"date":"2025-07-25","diesel":188.14,"adj":184.96},{"date":"2025-08-01","diesel":188.54,"adj":185.36},{"date":"2025-08-08","diesel":189.07,"adj":185.89},{"date":"2025-08-15","diesel":188.06,"adj":184.88},{"date":"2025-08-22","diesel":187.19,"adj":184.01},{"date":"2025-08-29","diesel":187.56,"adj":184.38},{"date":"2025-09-05","diesel":188.48,"adj":185.3},{"date":"2025-09-12","diesel":189.52,"adj":186.34},{"date":"2025-09-19","diesel":190.04,"adj":186.86},{"date":"2025-09-26","diesel":190.11,"adj":186.93},{"date":"2025-10-03","diesel":190.6,"adj":188.56},{"date":"2025-10-10","diesel":191.06,"adj":189.47},{"date":"2025-10-17","diesel":191.16,"adj":189.57},{"date":"2025-10-24","diesel":191.39,"adj":189.8},{"date":"2025-10-31","diesel":191.68,"adj":190.1},{"date":"2025-11-07","diesel":193.15,"adj":191.57},{"date":"2025-11-14","diesel":195.17,"adj":193.59},{"date":"2025-11-21","diesel":197.14,"adj":195.55},{"date":"2025-11-28","diesel":198.14,"adj":196.55},{"date":"2025-12-05","diesel":197.66,"adj":196.08},{"date":"2025-12-12","diesel":197.28,"adj":195.7},{"date":"2025-12-19","diesel":196.79,"adj":195.2},{"date":"2025-12-26","diesel":195.0,"adj":193.41},{"date":"2026-01-02","diesel":193.59,"adj":192.35},{"date":"2026-01-09","diesel":192.34,"adj":191.36},{"date":"2026-01-16","diesel":190.72,"adj":189.74},{"date":"2026-01-23","diesel":189.6,"adj":188.61},{"date":"2026-01-30","diesel":188.98,"adj":188.0},{"date":"2026-02-06","diesel":188.13,"adj":187.14},{"date":"2026-02-13","diesel":187.86,"adj":186.88},{"date":"2026-02-20","diesel":187.68,"adj":186.69},{"date":"2026-02-27","diesel":188.21,"adj":187.22},{"date":"2026-03-06","diesel":195.99,"adj":195.0},{"date":"2026-03-13","diesel":235.82,"adj":234.84},{"date":"2026-03-20","diesel":287.34,"adj":286.35},{"date":"2026-03-27","diesel":329.73,"adj":328.75},{"date":"2026-04-03","diesel":355.05,"adj":352.74},{"date":"2026-04-10","diesel":383.0,"adj":380.16},{"date":"2026-04-17","diesel":383.81,"adj":380.97},{"date":"2026-04-24","diesel":352.63,"adj":349.78},{"date":"2026-05-01","diesel":333.01,"adj":330.17},{"date":"2026-05-08","diesel":327.37,"adj":324.53},{"date":"2026-05-15","diesel":321.55,"adj":318.7},{"date":"2026-05-22","diesel":318.55,"adj":315.7},{"date":"2026-05-29","diesel":317.62,"adj":314.78},{"date":"2026-06-05","diesel":312.53,"adj":309.68},{"date":"2026-06-12","diesel":302.34,"adj":299.5},{"date":"2026-06-19","diesel":284.06,"adj":281.22},{"date":"2026-06-26","diesel":264.18,"adj":261.33},{"date":"2026-07-03","diesel":251.03,"adj":248.19},{"date":"2026-07-10","diesel":243.73,"adj":240.88},{"date":"2026-07-17","diesel":242.98,"adj":240.13},{"date":"2026-07-24","diesel":252.34,"adj":249.49},{"date":"2026-07-31","diesel":265.75,"adj":262.91},{"date":"2026-08-07","diesel":271.75,"adj":268.9},{"date":"2026-08-14","diesel":270.14,"adj":267.3},{"date":"2026-08-21","diesel":270.23,"adj":267.38},{"date":"2026-08-28","diesel":270.91,"adj":268.07},{"date":"2026-09-04","diesel":269.74,"adj":266.89},{"date":"2026-09-11","diesel":274.84,"adj":271.99},{"date":"2026-09-18","diesel":289.92,"adj":287.08}],"meta":{"mbie_last":"2026-09-18","brent_last":"2026-09-22","nzd_last":"2026-09-25","refreshed":"2026-09-29 10:34"}});
+</script>
+</body>
+</html>

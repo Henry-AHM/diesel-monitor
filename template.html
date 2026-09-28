@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en-NZ" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diesel Monitor</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23c2410c'/%3E%3Cpath d='M16 7c4 5 6 8 6 11a6 6 0 0 1-12 0c0-3 2-6 6-11z' fill='%23fff'/%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f5f3ef; --surface:#fffdfa; --surface-2:#f0ede7; --border:#e2ddd4; --text:#1f1d1a; --muted:#6b665d; --faint:#9a948a;
+  --diesel:#c2410c; --brent:#1d4ed8; --fx:#0f766e; --corr:#7c3aed; --pos:#15803d; --neg:#b91c1c; --band:rgba(194,65,12,.07);
+  --radius:10px; --shadow:0 1px 2px rgba(30,25,15,.05),0 2px 8px rgba(30,25,15,.04);
+  --font:'General Sans',Inter,system-ui,sans-serif;
+}
+[data-theme=dark]{
+  --bg:#12110f; --surface:#1b1a17; --surface-2:#24221e; --border:#33302a; --text:#ece8e1; --muted:#a39d92; --faint:#6f6a61;
+  --diesel:#fb923c; --brent:#60a5fa; --fx:#2dd4bf; --corr:#a78bfa; --pos:#4ade80; --neg:#f87171; --band:rgba(251,146,60,.08);
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;overflow:hidden}
+.app{display:grid;grid-template-rows:auto 1fr;height:100dvh}
+header{display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px;letter-spacing:-.01em}
+.brand svg{color:var(--diesel)}
+.brand small{display:block;font-weight:400;font-size:12px;color:var(--muted)}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px;color:var(--muted);font-size:12px}
+.icon-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:8px;width:32px;height:32px;display:grid;place-items:center;cursor:pointer}
+main{min-width:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 24px 40px}
+.wrap{min-width:0;max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;box-shadow:var(--shadow)}
+.ctl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.seg{display:inline-flex;background:var(--surface-2);border-radius:8px;padding:2px}
+.seg button{border:0;background:transparent;color:var(--muted);font:500 12px var(--font);padding:5px 10px;border-radius:6px;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.seg button:focus-visible,.icon-btn:focus-visible{outline:2px solid var(--brent);outline-offset:1px}
+label.chk{display:flex;gap:6px;align-items:center;cursor:pointer;color:var(--text);font-size:12px}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+.kpi{padding:14px 16px}
+.kpi .lbl{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.kpi .val{font-size:26px;font-weight:600;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums lining-nums}
+.kpi .sub{font-size:12px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+.grid2{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+.panel{padding:16px 18px}
+.panel h2{font-size:14px;font-weight:600;margin:0}
+.panel .desc{font-size:12px;color:var(--muted);margin:2px 0 12px}
+.ph{display:flex;align-items:flex-start;gap:12px;justify-content:space-between;flex-wrap:wrap}
+.chart-box{position:relative;height:380px}
+.chart-box.sm{height:230px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.lagcards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.lagcard{background:var(--surface-2);border-radius:8px;padding:10px;text-align:center}
+.lagcard .l{font-size:11px;color:var(--muted)}
+.lagcard .v{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.lagcard .s{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.lagcard.best{outline:1.5px solid var(--corr)}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums lining-nums}
+th,td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+th{font-weight:500;color:var(--muted);font-size:11.5px;background:var(--surface);position:sticky;top:0}
+th.grp{text-align:center;border-bottom:1px solid var(--border);color:var(--text);font-weight:600}
+td:first-child,th:first-child{text-align:left}
+tbody tr:hover{background:var(--surface-2)}
+tfoot td{font-weight:600;border-top:2px solid var(--border);border-bottom:0}
+.up{color:var(--neg)} .down{color:var(--pos)} .na{color:var(--faint)}
+.flag{font-size:10px;color:var(--muted);margin-left:3px}
+.ratio{display:inline-block;min-width:52px;padding:1px 6px;border-radius:4px;background:var(--surface-2)}
+.notes{font-size:12px;color:var(--muted);line-height:1.6}
+.notes a{color:var(--brent)}
+.notes p{margin:0 0 6px}
+.shock{display:inline-block;width:12px;height:10px;background:var(--band);border:1px dashed var(--diesel);vertical-align:middle;margin-right:4px}
+@media (max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}.grid2{grid-template-columns:1fr}}
+@media (max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}header{padding:10px 14px}main{padding:14px}.hdr-right .asof{display:none}.chart-box{height:300px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-label="Crude-to-Pump logo">
+      <circle cx="16" cy="16" r="14" stroke="currentColor" stroke-width="2.4"/>
+      <path d="M16 7.5c3.6 4.6 5.6 7.6 5.6 10.4a5.6 5.6 0 0 1-11.2 0c0-2.8 2-5.8 5.6-10.4z" fill="currentColor"/>
+      <path d="M4 21h24" stroke="currentColor" stroke-width="2.4"/>
+    </svg>
+    <div>Crude-to-Pump Monitor<small>NZ retail diesel vs Brent crude · <span id="rng"></span></small></div>
+  </div>
+  <div class="hdr-right"><span class="asof" id="asof"></span>
+    <button class="icon-btn" id="theme" aria-label="Toggle dark mode"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+  </div>
+</header>
+<main><div class="wrap">
+
+  <div class="controls" role="group" aria-label="Dashboard controls">
+    <div class="ctl">Diesel series <div class="seg" data-k="dser"><button data-v="board" aria-pressed="true">Board price</button><button data-v="adj">Discount-adjusted</button></div></div>
+    <div class="ctl">Brent unit <div class="seg" data-k="bunit"><button data-v="usd" aria-pressed="true">USD/bbl</button><button data-v="cpl">NZ c/L equiv.</button></div></div>
+    <label class="chk"><input type="checkbox" id="fxOn" checked> USD/NZD overlay</label>
+    <div class="ctl">Corr. window <div class="seg" data-k="win"><button data-v="3">3m</button><button data-v="6" aria-pressed="true">6m</button><button data-v="9">9m</button></div></div>
+    <div class="ctl">Corr. basis <div class="seg" data-k="basis"><button data-v="lvl" aria-pressed="true">Levels</button><button data-v="chg">MoM % change</button></div></div>
+    <div class="ctl">Diesel lag <div class="seg" data-k="lag"><button data-v="0">0d</button><button data-v="30" aria-pressed="true">30d</button><button data-v="60">60d</button></div></div>
+  </div>
+
+  <section class="kpis" id="kpis" aria-label="Key metrics"></section>
+
+  <section class="card panel">
+    <div class="ph"><div><h2>Diesel pump price vs Brent crude</h2><p class="desc">Monthly averages; <span id="mtdnote"></span> Left axis: diesel c/L. Right axis: Brent. Dashed: USD/NZD.</p></div>
+      <div class="legend" id="legendMain"></div></div>
+    <div class="chart-box"><canvas id="cMain" aria-label="Dual-axis chart of diesel and Brent prices"></canvas></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card panel">
+      <div class="ph"><div><h2>Rolling correlation</h2><p class="desc" id="corrDesc"></p></div></div>
+      <div class="chart-box sm"><canvas id="cCorr" aria-label="Rolling correlation chart"></canvas></div>
+    </section>
+    <section class="card panel">
+      <h2>Lag response, full period</h2>
+      <p class="desc">Brent MoM % change vs diesel % change at each lag.</p>
+      <div class="lagcards" id="lagcards"></div>
+      <div class="chart-box sm" style="height:150px;margin-top:10px"><canvas id="cLag" aria-label="Pass-through by lag"></canvas></div>
+    </section>
+  </div>
+
+  <section class="card panel">
+    <div class="ph"><div><h2>Transmission table</h2><p class="desc">Monthly change in Brent vs diesel, same month and shifted 30 / 60 days.</p></div>
+      <div class="ctl">View <div class="seg" data-k="tview"><button data-v="pct" aria-pressed="true">% change</button><button data-v="cpl">c/L change</button></div></div></div>
+    <div class="tbl-wrap"><table id="tbl"></table></div>
+  </section>
+
+  <section class="card panel notes">
+    <h2 style="color:var(--text);margin-bottom:8px">Method and sources</h2>
+    <p><b>Diesel:</b> MBIE weekly main-port board price (c/L, incl. GST), or the discount-adjusted retail price, from <a href="https://www.mbie.govt.nz/building-and-energy/energy-and-natural-resources/energy-statistics-and-modelling/energy-statistics/weekly-fuel-price-monitoring" target="_blank" rel="noopener">MBIE weekly fuel price monitoring</a>. Monthly bucket = mean of weekly (Friday) observations. Weeks from Jul 2026 are marked provisional by MBIE.</p>
+    <p><b>Brent:</b> daily Europe Brent spot, <a href="https://fred.stlouisfed.org/series/DCOILBRENTEU" target="_blank" rel="noopener">FRED DCOILBRENTEU</a>. <b>FX:</b> daily US$ per NZ$, <a href="https://fred.stlouisfed.org/series/DEXUSNZ" target="_blank" rel="noopener">FRED DEXUSNZ</a>. NZ c/L equivalent = Brent ÷ USD/NZD ÷ 158.987 L × 100.</p>
+    <p><b>Lags:</b> weekly diesel is interpolated to daily, then averaged over the calendar month shifted forward 30 or 60 days. Percentage changes are month-on-month. Transmission ratio = diesel % change ÷ Brent % change (in NZD). A ratio below 1 is expected, because GST, margins and freight dilute the crude share of the pump price. Ratios are hidden where Brent moved less than 2%. Lagged values use MBIE data to <span id="mlast"></span>; a lag that runs past the latest week is left blank.</p>
+    <p><b><span id="mtdname"></span>:</b> averages use the latest published observations only: MBIE diesel to <span id="m2"></span>, Brent spot to <span id="b2"></span>, USD/NZD to <span id="f2"></span>. Figures will change as later weeks are released. Brent futures were not spliced in, because front-month futures trade well below dated spot in the current market.</p>
+    <p><span class="shock"></span><b>Shaded band, Mar-Apr 2026:</b> Brent rose 63% in March, its largest monthly gain since 1988, as the Iran war disrupted Gulf supply (<a href="https://www.cnbc.com/2026/03/31/oil-price-today-wti-brent-trump-energy-sites-water-war-escalation-deal.html" target="_blank" rel="noopener">CNBC</a>; <a href="https://www.eia.gov/todayinenergy/detail.php?id=67424" target="_blank" rel="noopener">EIA</a>). Stats NZ reported diesel prices up 36.6% from March to April 2026 (<a href="https://www.stats.govt.nz/news/petrol-and-diesel-prices-continue-to-rise-in-april-2026/" target="_blank" rel="noopener">Stats NZ</a>).</p>
+  </section>
+</div></main>
+</div>
+
+<script>
+const S={dser:'board',bunit:'usd',win:6,basis:'lvl',lag:30,tview:'pct',fx:true};
+let D,M,charts={};
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fmt=(v,d=1)=>v==null||isNaN(v)?'-':v.toFixed(d);
+const pct=(a,b)=>(a==null||b==null)?null:(a/b-1)*100;
+const mlabel=m=>{const[y,mo]=m.split('-');return new Date(y,mo-1,1).toLocaleString('en-NZ',{month:'short'})+' '+y.slice(2)};
+function pearson(x,y){const p=x.map((v,i)=>[v,y[i]]).filter(([a,b])=>a!=null&&b!=null);const n=p.length;if(n<3)return null;
+  const mx=p.reduce((s,[a])=>s+a,0)/n,my=p.reduce((s,[,b])=>s+b,0)/n;let sxy=0,sxx=0,syy=0;
+  p.forEach(([a,b])=>{sxy+=(a-mx)*(b-my);sxx+=(a-mx)**2;syy+=(b-my)**2});return sxy/Math.sqrt(sxx*syy)}
+function ols(x,y){const p=x.map((v,i)=>[v,y[i]]).filter(([a,b])=>a!=null&&b!=null);const n=p.length;if(n<3)return null;
+  const mx=p.reduce((s,[a])=>s+a,0)/n,my=p.reduce((s,[,b])=>s+b,0)/n;let sxy=0,sxx=0;p.forEach(([a,b])=>{sxy+=(a-mx)*(b-my);sxx+=(a-mx)**2});return {beta:sxy/sxx,n}}
+const dKey=L=>(S.dser==='board'?'d':'da')+L;
+const dLvl=r=>S.dser==='board'?r.diesel:r.diesel_adj;
+
+// derive per-month change series (index 0 = Feb 2025 base month)
+function derive(){
+  return M.map((r,i)=>{const p=M[i-1];const o={...r};
+    o.brentPct=p?pct(r.brent,p.brent):null; o.brentNzPct=p?pct(r.brent_cpl,p.brent_cpl):null; o.fxPct=p?pct(r.usdnzd,p.usdnzd):null;
+    o.brentCplChg=p?r.brent_cpl-p.brent_cpl:null;
+    [0,30,60].forEach(L=>{const k=dKey(L);o['dp'+L]=p&&r[k]!=null&&p[k]!=null?pct(r[k],p[k]):null;o['dc'+L]=p&&r[k]!=null&&p[k]!=null?r[k]-p[k]:null;});
+    return o;});
+}
+const bandPlugin={id:'band',beforeDatasetsDraw(c){const {ctx,chartArea:a,scales:{x}}=c;const i0=c.data.labels.indexOf('Mar 26'),i1=c.data.labels.indexOf('Apr 26');if(i0<0)return;
+  const w=(x.getPixelForValue(1)-x.getPixelForValue(0))/2;ctx.save();ctx.fillStyle=css('--band');ctx.fillRect(x.getPixelForValue(i0)-w,a.top,x.getPixelForValue(i1)-x.getPixelForValue(i0)+2*w,a.bottom-a.top);
+  ctx.fillStyle=css('--muted');ctx.font='11px General Sans, sans-serif';ctx.fillText('Iran war supply shock',x.getPixelForValue(i0)-w+6,a.bottom-8);ctx.restore();}};
+
+function baseOpts(){Chart.defaults.font.family="'General Sans',Inter,sans-serif";Chart.defaults.color=css('--muted');Chart.defaults.borderColor=css('--border');}
+
+function render(){
+  baseOpts();
+  const R=derive(), V=R.slice(1); // Mar 2025 - Aug 2026
+  const labels=V.map(r=>mlabel(r.month));
+  const brentVals=V.map(r=>S.bunit==='usd'?r.brent:r.brent_cpl);
+  // KPIs
+  const f=V[0],l=V[V.length-1];
+  const ch=R.slice(1);
+  const lagStats=[0,30,60].map(L=>{const x=ch.map(r=>r.brentNzPct),y=ch.map(r=>r['dp'+L]);return {L,r:pearson(x,y),b:ols(x,y)}});
+  const best=lagStats.reduce((a,b)=>(b.r??-9)>(a.r??-9)?b:a);
+  const lvlCorr=pearson(V.map(r=>r.brent_cpl),V.map(r=>r[dKey(S.lag)]));
+  const k=[
+    {c:'--diesel',l:'Diesel, '+mlabel(l.month)+(l.mtd?' MTD':''),v:fmt(dLvl(l))+'<span style="font-size:14px;color:var(--muted)"> c/L</span>',s:`${sign(pct(dLvl(l),dLvl(f)))}% vs Mar 25 (${fmt(dLvl(f))})`},
+    {c:'--brent',l:'Brent, '+mlabel(l.month)+(l.mtd?' MTD':''),v:'$'+fmt(l.brent),s:`${sign(pct(l.brent,f.brent))}% vs Mar 25 ($${fmt(f.brent)})`},
+    {c:'--fx',l:'USD/NZD, '+mlabel(l.month)+(l.mtd?' MTD':''),v:fmt(l.usdnzd,4),s:`${sign(pct(l.usdnzd,f.usdnzd))}% vs Mar 25`},
+    {c:'--corr',l:`Level correlation, ${S.lag}d lag`,v:fmt(lvlCorr,2),s:`Brent (NZD) vs diesel, ${V.length} months`},
+    {c:'--corr',l:'Strongest lag',v:best.L+'d',s:`r = ${fmt(best.r,2)} · β = ${fmt(best.b?.beta,2)}`}
+  ];
+  document.getElementById('kpis').innerHTML=k.map(o=>`<div class="card kpi"><div class="lbl"><span class="dot" style="background:var(${o.c})"></span>${o.l}</div><div class="val">${o.v}</div><div class="sub">${o.s}</div></div>`).join('');
+
+  // main chart
+  const ds=[
+    {label:S.dser==='board'?'Diesel board price (c/L)':'Diesel discount-adjusted (c/L)',data:V.map(dLvl),borderColor:css('--diesel'),backgroundColor:css('--diesel'),yAxisID:'yD',tension:.3,borderWidth:2.5,pointRadius:3},
+    {label:S.bunit==='usd'?'Brent (USD/bbl)':'Brent (NZ c/L equiv.)',data:brentVals,borderColor:css('--brent'),backgroundColor:css('--brent'),yAxisID:'yB',tension:.3,borderWidth:2.5,pointRadius:3},
+    {label:'USD/NZD',data:V.map(r=>r.usdnzd),borderColor:css('--fx'),backgroundColor:css('--fx'),yAxisID:'yF',tension:.3,borderWidth:1.6,borderDash:[5,4],pointRadius:0,hidden:!S.fx}
+  ];
+  document.getElementById('legendMain').innerHTML=ds.filter(d=>!d.hidden).map(d=>`<span><i style="background:${d.borderColor}${d.borderDash?';background:repeating-linear-gradient(90deg,'+d.borderColor+' 0 4px,transparent 4px 7px)':''}"></i>${d.label}</span>`).join('');
+  charts.main?.destroy();
+  charts.main=new Chart(cMain,{type:'line',data:{labels,datasets:ds},plugins:[bandPlugin],options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.dataset.yAxisID==='yF'?c.parsed.y.toFixed(4):c.parsed.y.toFixed(1)}`}}},
+    scales:{x:{grid:{display:false}},
+      yD:{position:'left',title:{display:true,text:'Diesel c/L',color:css('--diesel')},ticks:{color:css('--diesel')},grid:{color:css('--border')}},
+      yB:{position:'right',title:{display:true,text:S.bunit==='usd'?'Brent USD/bbl':'Brent NZ c/L',color:css('--brent')},ticks:{color:css('--brent')},grid:{display:false}},
+      yF:{position:'right',display:S.fx,min:0.54,max:0.63,title:{display:true,text:'USD/NZD',color:css('--fx')},ticks:{color:css('--fx'),callback:v=>v.toFixed(2)},grid:{display:false}}}}});
+
+  // rolling correlation
+  const bx=S.basis==='lvl'?R.map(r=>r.brent_cpl):R.map(r=>r.brentNzPct);
+  const dy=S.basis==='lvl'?R.map(r=>r[dKey(S.lag)]):R.map(r=>r['dp'+S.lag]);
+  const rc=R.map((r,i)=>{if(i<1)return null;const s=i-S.win+1;if(s<(S.basis==='lvl'?0:1))return null;return pearson(bx.slice(s,i+1),dy.slice(s,i+1))}).slice(1);
+  document.getElementById('corrDesc').textContent=`${S.win}-month Pearson r, Brent (NZD) vs diesel ${S.lag}d later, ${S.basis==='lvl'?'price levels':'MoM % changes'}.`;
+  charts.corr?.destroy();
+  charts.corr=new Chart(cCorr,{type:'bar',data:{labels,datasets:[{data:rc,backgroundColor:rc.map(v=>v==null?'transparent':v>=0?css('--corr'):css('--neg')),borderRadius:3,maxBarThickness:22}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' r = '+(c.parsed.y==null?'n/a':c.parsed.y.toFixed(2))}}},
+    scales:{x:{grid:{display:false}},y:{min:-1,max:1,ticks:{stepSize:.5},grid:{color:c=>c.tick.value===0?css('--muted'):css('--border')}}}}});
+
+  // lag cards + chart
+  document.getElementById('lagcards').innerHTML=lagStats.map(s=>`<div class="lagcard ${s===best?'best':''}"><div class="l">${s.L===0?'Same month':'+'+s.L+' days'}</div><div class="v">r ${fmt(s.r,2)}</div><div class="s">β ${fmt(s.b?.beta,2)} · n ${s.b?.n??0}</div></div>`).join('');
+  charts.lag?.destroy();
+  charts.lag=new Chart(cLag,{type:'bar',data:{labels:['0d','30d','60d'],datasets:[{label:'Correlation r',data:lagStats.map(s=>s.r),backgroundColor:css('--corr'),borderRadius:3,maxBarThickness:26},{label:'Pass-through β',data:lagStats.map(s=>s.b?.beta),backgroundColor:css('--diesel'),borderRadius:3,maxBarThickness:26}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},scales:{x:{min:-0.5,max:1.2,grid:{color:css('--border')}},y:{grid:{display:false}}}}});
+
+  renderTable(R,lagStats);
+}
+const sign=(v,d=1)=>{if(v==null)return '-';const t=v.toFixed(d);return /^-0\.0+$/.test(t)?t.slice(1):(v>0?'+':'')+t};
+function cell(v,d=1,unit=''){if(v==null)return '<span class="na">-</span>';const c=v>0.05?'up':v<-0.05?'down':'';const a=v>0.05?'▲':v<-0.05?'▼':'';return `<span class="${c}">${a} ${sign(v,d)}${unit}</span>`}
+function ratio(d,b){if(d==null||b==null||Math.abs(b)<2)return '<span class="na">-</span>';const q=(d/b).toFixed(2);return `<span class="ratio">${/^-0\.00$/.test(q)?'0.00':q}×</span>`}
+function renderTable(R,lagStats){
+  const V=R.slice(1),pctV=S.tview==='pct';
+  const u=pctV?'%':'';
+  let h=`<thead><tr><th rowspan="2">Month</th><th class="grp" colspan="${pctV?4:3}">Crude and FX</th><th class="grp" colspan="4">Diesel (${S.dser==='board'?'board':'adjusted'})</th><th class="grp" colspan="2">${pctV?'Transmission ratio':'c/L pass-through'}</th></tr>
+  <tr><th>Brent $/bbl</th>${pctV?'<th>Brent Δ USD</th><th>Brent Δ NZD</th><th>USD/NZD Δ</th>':'<th>Brent NZ c/L</th><th>Brent Δ c/L</th>'}<th>Avg c/L</th><th>Δ same mo.</th><th>Δ +30d</th><th>Δ +60d</th><th>+30d</th><th>+60d</th></tr></thead><tbody>`;
+  V.forEach(r=>{
+    const pf='<span class="flag" title="Partial window">partial</span>';const part30=r.cov30<1&&r.cov30>0?pf:'';const part0=r.cov0<1&&r.cov0>0?pf:'';
+    h+=`<tr><td>${mlabel(r.month)}${r.mtd?'<span class="flag" title="Month to date">MTD</span>':r.provisional?'<span class="flag" title="MBIE provisional">prov.</span>':''}</td><td>${fmt(r.brent)}</td>`+
+      (pctV?`<td>${cell(r.brentPct,1,u)}</td><td>${cell(r.brentNzPct,1,u)}</td><td>${cell(r.fxPct,2,u)}</td>`:`<td>${fmt(r.brent_cpl)}</td><td>${cell(r.brentCplChg)}</td>`)+
+      `<td>${fmt(dLvl(r))}</td><td>${cell(pctV?r.dp0:r.dc0,1,u)}${part0}</td><td>${cell(pctV?r.dp30:r.dc30,1,u)}${part30}</td><td>${cell(pctV?r.dp60:r.dc60,1,u)}</td>`+
+      (pctV?`<td>${ratio(r.dp30,r.brentNzPct)}</td><td>${ratio(r.dp60,r.brentNzPct)}</td>`:`<td>${ratio(r.dc30,r.brentCplChg)}</td><td>${ratio(r.dc60,r.brentCplChg)}</td>`)+`</tr>`;
+  });
+  // footer: correlation & cumulative
+  const x=V.map(r=>pctV?r.brentNzPct:r.brentCplChg);
+  const st=L=>{const y=V.map(r=>pctV?r['dp'+L]:r['dc'+L]);return {r:pearson(x,y),b:ols(x,y)?.beta}};
+  const s0=st(0),s30=st(30),s60=st(60);
+  const span=pctV?4:3;
+  h+=`</tbody><tfoot><tr><td>Correlation r</td><td colspan="${span}" style="text-align:right;color:var(--muted);font-weight:500">vs Brent Δ (NZD)</td><td></td><td>${fmt(s0.r,2)}</td><td>${fmt(s30.r,2)}</td><td>${fmt(s60.r,2)}</td><td colspan="2"></td></tr>
+  <tr><td>Slope β</td><td colspan="${span}" style="text-align:right;color:var(--muted);font-weight:500">${pctV?'diesel % per 1% Brent':'diesel c/L per 1c Brent'}</td><td></td><td>${fmt(s0.b,2)}</td><td>${fmt(s30.b,2)}</td><td>${fmt(s60.b,2)}</td><td>${fmt(s30.b,2)}×</td><td>${fmt(s60.b,2)}×</td></tr></tfoot>`;
+  tbl.innerHTML=h;
+}
+
+document.querySelectorAll('.seg').forEach(g=>g.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));const k=g.dataset.k;S[k]=isNaN(+b.dataset.v)?b.dataset.v:+b.dataset.v;render();}));
+fxOn.addEventListener('change',e=>{S.fx=e.target.checked;render()});
+theme.addEventListener('click',()=>{const r=document.documentElement;r.dataset.theme=r.dataset.theme==='dark'?'light':'dark';render()});
+if(matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.dataset.theme='dark';
+
+(j=>{D=j;M=j.monthly;
+  asof.textContent=`MBIE to ${j.meta.mbie_last} · FRED to ${j.meta.brent_last}`;mlast.textContent=j.meta.mbie_last;m2.textContent=j.meta.mbie_last;b2.textContent=j.meta.brent_last;f2.textContent=j.meta.nzd_last;
+  const ml=j.monthly, f=ml[1], l=ml[ml.length-1];
+  rng.textContent=mlabel(f.month)+' to '+mlabel(l.month)+(l.mtd?' (month to date)':'')+' · refreshed '+j.meta.refreshed;
+  mtdnote.textContent=l.mtd?mlabel(l.month)+' is month to date.':'';
+  mtdname.textContent=mlabel(l.month)+(l.mtd?' (month to date)':' (latest month)');
+  render();})(/*DATA*/null);
+</script>
+</body>
+</html>
