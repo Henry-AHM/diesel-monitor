@@ -10,4 +10,4 @@ Refreshes every Thursday morning (NZ time) from public data:
 
 No login or API key. `refresh_diesel.py` downloads the data, writes `data.json`, and builds the page from `template.html`.
 
-Henry Martin, AHM Consult. henrymartin71@outlook.com
+Henry Martin
