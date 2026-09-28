@@ -40,7 +40,7 @@ def mbie():
     w = defaultdict(dict)
     text = get(MBIE)
     if not text.startswith('"Week"'):
-        raise RuntimeError("MBIE file did not come back as the expected CSV")
+        raise RuntimeError("MBIE file did not come back as the expected CSV; it started: %r" % text[:300])
     for row in csv.DictReader(io.StringIO(text)):
         if row["Fuel"] != "Diesel" or row["Unit"] != "NZD c/L":
             continue
