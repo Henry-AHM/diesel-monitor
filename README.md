@@ -4,7 +4,7 @@ NZ diesel pump prices against Brent crude, in NZ cents per litre, monthly from M
 
 **View it:** https://henry-ahm.github.io/diesel-monitor/
 
-Refreshes every Thursday morning (NZ time) from public data:
+Refreshed every Thursday morning (NZ time) from public data:
 - MBIE weekly fuel price monitoring, via data.govt.nz
 - FRED: Brent spot (DCOILBRENTEU) and US$ per NZ$ (DEXUSNZ)
 
